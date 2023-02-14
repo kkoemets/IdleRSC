@@ -34,5 +34,8 @@ Map/path.png
 # User chosen cache
 Cache/
 
+# easystart.py
+/accounts.txt
+
 # User screenshots
 Screenshots/
