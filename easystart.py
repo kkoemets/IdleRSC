@@ -11,9 +11,6 @@ except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "psutil"])
     import psutil
 
-# Define the file to store the user accounts
-ACCOUNTS_FILE = "accounts.txt"
-
 
 class Account:
     def __init__(self, username: str, password: str):
@@ -29,36 +26,36 @@ class AccountProcess:
 
 class AccountService:
 
-    # Helper function to check if a user exists in the file
-    @staticmethod
-    def account_exists(username: str):
-        with open(ACCOUNTS_FILE, "r") as f:
+    # constructor
+    def __init__(self):
+        self.account_file = "accounts.txt"
+
+    def account_exists(self, username: str):
+        with open(self.account_file, "r") as f:
             for line in f:
                 if line.startswith(username + ":"):
                     return True
         return False
 
-    @staticmethod
-    def add_account(username: str, password: str) -> None:
-        with open(ACCOUNTS_FILE, "a") as f:
+    def add_account(self, username: str, password: str) -> None:
+        with open(self.account_file, "a") as f:
             f.write(username.strip() + ":" + password.strip() + "\n")
 
-    @staticmethod
-    def get_all_accounts() -> list[Account]:
-        with open(ACCOUNTS_FILE, "r") as f:
+    def get_all_accounts(self) -> list[Account]:
+        with open(self.account_file, "r") as f:
             return [Account(user_and_pw[0], user_and_pw[1]) for user_and_pw in [line.split(":") for line in f]]
 
 
 class ProcessService:
-    def __init__(self, account_service: AccountService):
-        self.account_service = account_service
+    def __init__(self, accounts: AccountService):
+        self.account_service = accounts
         self.account_processes = []
 
     def poll(self) -> None:
         self.account_processes = [process for process in self.account_processes if process.process.poll() is None]
 
     def get_accounts_without_process(self) -> list[Account]:
-        return [account for account in AccountService.get_all_accounts() if
+        return [account for account in self.account_service.get_all_accounts() if
                 account.username not in [process.username for process in
                                          self.account_processes]]
 
@@ -68,7 +65,7 @@ class ProcessService:
         password = account.password.strip()
 
         command = 'java -cp "IdleRSC.jar;patched_client.jar" bot.Main ' \
-                  '--enablegfx "false" --debug "true" ' \
+                  '--enablegfx "true" --debug "true" ' \
                   '--username "{}" --password "{}"'.format(username, password)
 
         process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
@@ -76,18 +73,34 @@ class ProcessService:
 
         self.account_processes = self.account_processes + [AccountProcess(username, process)]
 
+    def probe(self):
+        for account_process in self.account_processes:
+            print("Probing process for account '{}'...".format(account_process.username))
+            try:
+                stdout, stderr = account_process.process.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                print("The process timed out.")
+            else:
+                if stdout:
+                    print("The process wrote to standard output:")
+                    print(stdout.decode())
+                if stderr:
+                    print("The process wrote to standard error:")
+                    print(stderr.decode())
 
-process_service = ProcessService(AccountService())
+
+account_service = AccountService()
+process_service = ProcessService(account_service)
 
 
 def add_account_with_prompt() -> None:
     username = input("Enter a new username: ")
-    if AccountService.account_exists(username):
+    if account_service.account_exists(username):
         print("Username already exists. Please try another.")
         return
 
     password = getpass.getpass("Enter a password: ")
-    AccountService.add_account(username, password)
+    account_service.add_account(username, password)
     print("Account created successfully!")
 
 
@@ -133,7 +146,7 @@ def start_an_inactive_account_with_prompt(inactive_accounts: list[Account]) -> N
 
 def initialize_processes_with_prompt() -> None:
     if input("Start processes for all accounts? (y/n): ") == "y":
-        for account in AccountService.get_all_accounts():
+        for account in account_service.get_all_accounts():
             process_service.start_process(account)
     else:
         if input("Start a process for a specific account? (y/n): ") == "y":
@@ -152,9 +165,10 @@ def main() -> None:
     print("###IMPORTANT### Before you start using the tool, make sure you can run IdleRSC normally.")
     print("")
 
-    if not os.path.exists(ACCOUNTS_FILE):
-        print("Creating users file +" + ACCOUNTS_FILE)
-        open(ACCOUNTS_FILE, "w").close()
+    account_file = account_service.account_file
+    if not os.path.exists(account_file):
+        print("Creating users file +" + account_file)
+        open(account_file, "w").close()
 
     while True:
         if input("Do you want to create a new account? (y/n): ") == "y":
@@ -169,6 +183,9 @@ def main() -> None:
 
     while len(process_service.account_processes) > 0:
         print("Processes running: {}".format(len(process_service.account_processes)))
+
+        if input("Do you want to probe account processes? (y/n): ") == "y":
+            process_service.probe()
 
         inactive_accounts = process_service.get_accounts_without_process()
         if len(inactive_accounts) > 0 and input("Start a process for an account? (y/n): ") == "y":
