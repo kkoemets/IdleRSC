@@ -1,20 +1,19 @@
 package controller;
 
+import models.entities.MapPoint;
+
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.GZIPInputStream;
 
-import static controller.Node.WORLD_H;
-import static controller.Node.WORLD_W;
-import static controller.Node.getNode;
-import static controller.Node.resetNodes;
+import static controller.Node.*;
 
 class IdleScriptPathWalker {
 
@@ -115,6 +114,7 @@ class IdleScriptPathWalker {
         Node last = path[path.length - 1];
         if (controller.currentX() == last.x && controller.currentY() == last.y) {
             path = null;
+            System.out.println("Path complete.");
             return false;
         }
         long c_time = System.currentTimeMillis();
@@ -293,6 +293,12 @@ class IdleScriptPathWalker {
         return calcPath(controller.currentX(), controller.currentY(), x, y);
     }
 
+    public Path calcPath(MapPoint p1, MapPoint p2) {
+        Path path = calcPath(p1.getX(), p1.getY(), p2.getX(), p2.getY());
+        createImage(path);
+        return path;
+    }
+
     public Path calcPath(int x1, int y1, int x2, int y2) {
         Node start = getNode(nodes, x1, y1);
         if (start == null) return null;
@@ -408,6 +414,63 @@ class IdleScriptPathWalker {
 
     public void atObject(int x, int y) {
         controller.atObject(x, y);
+    }
+
+    public void createImage(Path path) {
+        Node start = Arrays.stream(path.n).reduce((a, b) -> a).get();
+
+        Node end = Arrays.stream(path.n).reduce((a, b) -> b).get();
+
+        if (path == null) {
+            System.out.println("Failed to calculate path. :(");
+            return;
+        }
+
+        BufferedImage image = getMapImage();
+        if (image == null) {
+            return;
+        }
+
+        System.out.print("Generating path image... ");
+        Graphics g = image.getGraphics();
+        g.setColor(Color.GREEN);
+        int len = path.n.length;
+        for (int i = 0; i < len; ++i) {
+            Node p = path.n[i];
+            g.fillOval(WORLD_W - 1 - p.x, p.y, 3, 3);
+        }
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+        g.setColor(Color.BLACK);
+        g.drawString("Start", WORLD_W - start.x, start.y + 1);
+        g.drawString("Goal", WORLD_W - end.x, end.y + 1);
+        g.setColor(Color.WHITE);
+        g.drawString("Start", WORLD_W - 1 - start.x, start.y);
+        g.drawString("Goal", WORLD_W - 1 - end.x, end.y);
+        System.out.println("done.");
+        System.out.print("Writing path image... ");
+        try {
+            ImageIO.write(image, "PNG", new File(
+                    "." + File.separator + "Map" +
+                            File.separator + "path.png"));
+            System.out.println("done.");
+        } catch (Throwable t) {
+            System.out.println("failed: " + t);
+        }
+    }
+
+    private BufferedImage getMapImage() {
+        File file = new File(
+                "." + File.separator + "Map" + File.separator + "map.png");
+
+        System.out.print("Reading map image... ");
+        try {
+            BufferedImage image = ImageIO.read(file);
+            System.out.println("done.");
+            return image;
+        } catch (IOException ex) {
+            System.out.println("failed: " + ex);
+        }
+        return null;
     }
 
 }

@@ -13,6 +13,12 @@ sourceSets {
     }
 }
 
+sourceSets {
+    test {
+        java.srcDirs = ['test']
+    }
+}
+
 repositories {
     mavenCentral()
 }
@@ -21,6 +27,9 @@ repositories {
 dependencies {
     implementation files('patched_client.jar')
     implementation group: 'org.reflections', name: 'reflections', version: '0.10.2'
+
+    testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: '5.9.2'
+    testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '4.11.0'
 }
 
 jar {
@@ -49,5 +58,6 @@ tasks.register("cleanBuildDir", Delete) {
 }
 
 // Ensure all tasks are completed when running build by making build require
-// the last task in a dependency chain
+// the last task in a dependency chaintestImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.1.1'
+
 build.dependsOn(cleanBuildDir)
